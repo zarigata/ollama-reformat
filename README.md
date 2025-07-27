@@ -12,47 +12,69 @@ A modern, clean web interface for fine-tuning Ollama models with advanced featur
 - **GitHub Integration**: Connect with your GitHub account for model sharing
 - **Virtual Environment**: Python virtual environment support
 
-## Quick Start
+## 🚀 One-Click Setup & Run
 
 ### Prerequisites
 - Python 3.11+
 - Node.js 16+
-- Ollama installed and running
+- Ollama installed and running (`ollama serve`)
 
-### Installation
+### 🎯 Super Quick Start (Choose One)
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/zarigata/ollama-fine-tuning-studio.git
-   cd ollama-fine-tuning-studio
-   ```
+#### **Option 1: Cross-Platform Python Script** ⭐ (Recommended)
+```bash
+# Windows, macOS, Linux - One command does everything
+python start_all.py
+```
 
-2. **Set up Python environment**
+#### **Option 2: Windows Batch Script**
+```cmd
+# Double-click or run in Command Prompt
+start_all.bat
+```
+
+#### **Option 3: Windows PowerShell**
+```powershell
+# Run in PowerShell
+.\start_all.ps1
+```
+
+#### **Option 4: Manual Setup (Advanced)**
+If you prefer manual control:
+
+1. **Set up Python virtual environment**
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    pip install -r requirements.txt
    ```
 
-3. **Install frontend dependencies**
+2. **Install frontend dependencies**
    ```bash
    npm install
    ```
 
-4. **Start the development servers**
-
-   **Backend (Terminal 1):**
+3. **Start services separately**
    ```bash
+   # Terminal 1: Backend
    python -m uvicorn backend.main:app --reload --port 8000
-   ```
-
-   **Frontend (Terminal 2):**
-   ```bash
+   
+   # Terminal 2: Frontend
    npm run dev
    ```
 
-5. **Open your browser**
-   Navigate to `http://localhost:3000`
+### 📁 Virtual Environment Location
+The Python virtual environment is created automatically in:
+```
+ollama-fine-tuning-studio/
+├── venv/                 # Python virtual environment
+├── backend/
+├── src/
+├── start_all.py         # One-click startup (cross-platform)
+├── start_all.bat        # Windows batch script
+├── start_all.ps1        # PowerShell script
+└── ...
+```
 
 ## Usage
 
