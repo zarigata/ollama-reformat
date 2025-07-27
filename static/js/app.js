@@ -1,3 +1,225 @@
+// Main application state and utilities
+const appState = {
+    // API endpoints
+    endpoints: {
+        models: '/api/models',
+        search: '/api/models/search',
+        pull: '/api/models/pull',
+        delete: '/api/models/delete',
+        system: '/api/system/info',
+        fineTune: '/api/fine-tune'
+    },
+    
+    // UI state
+    state: {
+        isLoading: false,
+        isSearching: false,
+        activeTab: 'installed',
+        searchQuery: '',
+        models: [],
+        searchResults: [],
+        selectedModel: null,
+        notifications: []
+    },
+    
+    // Initialize the application
+    async init() {
+        await this.loadModels();
+        this.setupEventListeners();
+        this.setupTooltips();
+    },
+    
+    // Load installed models
+    async loadModels() {
+        try {
+            this.state.isLoading = true;
+            const response = await fetch(this.endpoints.models);
+            const data = await response.json();
+            this.state.models = data.data || [];
+        } catch (error) {
+            console.error('Error loading models:', error);
+            this.showNotification('Failed to load models', 'error');
+        } finally {
+            this.state.isLoading = false;
+        }
+    },
+    
+    // Search for models
+    async searchModels(query) {
+        if (!query.trim()) {
+            this.state.searchResults = [];
+            return;
+        }
+        
+        try {
+            this.state.isSearching = true;
+            const response = await fetch(`${this.endpoints.search}?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            this.state.searchResults = data.data || [];
+        } catch (error) {
+            console.error('Error searching models:', error);
+            this.showNotification('Failed to search models', 'error');
+        } finally {
+            this.state.isSearching = false;
+        }
+    },
+    
+    // Download a model
+    async downloadModel(modelName) {
+        try {
+            this.showNotification(`Downloading ${modelName}...`, 'info');
+            const response = await fetch(this.endpoints.pull, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: modelName })
+            });
+            
+            if (!response.ok) throw new Error('Download failed');
+            
+            const data = await response.json();
+            this.showNotification(`Successfully downloaded ${modelName}`, 'success');
+            await this.loadModels();
+            return data;
+        } catch (error) {
+            console.error('Error downloading model:', error);
+            this.showNotification(`Failed to download ${modelName}`, 'error');
+            throw error;
+        }
+    },
+    
+    // Delete a model
+    async deleteModel(modelName) {
+        if (!confirm(`Are you sure you want to delete ${modelName}?`)) return;
+        
+        try {
+            const response = await fetch(`${this.endpoints.delete}/${encodeURIComponent(modelName)}`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) throw new Error('Deletion failed');
+            
+            this.showNotification(`Deleted ${modelName}`, 'success');
+            await this.loadModels();
+        } catch (error) {
+            console.error('Error deleting model:', error);
+            this.showNotification(`Failed to delete ${modelName}`, 'error');
+        }
+    },
+    
+    // Show notification
+    showNotification(message, type = 'info') {
+        const id = Date.now();
+        const notification = { id, message, type };
+        this.state.notifications.push(notification);
+        
+        // Auto-remove notification after 5 seconds
+        setTimeout(() => {
+            this.state.notifications = this.state.notifications.filter(n => n.id !== id);
+        }, 5000);
+    },
+    
+    // Setup event listeners
+    setupEventListeners() {
+        // Search input debounce
+        let searchTimeout;
+        document.addEventListener('input', (e) => {
+            if (e.target.matches('[x-model="searchQuery"]')) {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this.searchModels(e.target.value);
+                }, 300);
+            }
+        });
+        
+        // Close notifications
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('[data-close-notification]')) {
+                const id = parseInt(e.target.closest('[data-notification-id]').dataset.notificationId);
+                this.state.notifications = this.state.notifications.filter(n => n.id !== id);
+            }
+        });
+    },
+    
+    // Initialize tooltips
+    setupTooltips() {
+        // Initialize any tooltip libraries if needed
+    },
+    
+    // Format file size
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    },
+    
+    // Format date
+    formatDate(dateString) {
+        return new Date(dateString).toLocaleString();
+    }
+};
+
+// Initialize the application when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Expose appState to window for Alpine.js
+    window.appState = appState;
+    
+    // Initialize the app
+    appState.init();
+    
+    // Alpine.js components
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('modelManager', () => ({
+            // Model management state
+            showSearchModal: false,
+            showDeleteConfirm: false,
+            selectedModel: null,
+            searchQuery: '',
+            isDownloading: false,
+            
+            // Initialize component
+            init() {
+                // Any component-specific initialization
+            },
+            
+            // Toggle model selection
+            toggleModel(model) {
+                this.selectedModel = this.selectedModel?.name === model.name ? null : model;
+            },
+            
+            // Download model handler
+            async downloadModel(modelName) {
+                this.isDownloading = true;
+                try {
+                    await appState.downloadModel(modelName);
+                    this.showSearchModal = false;
+                    this.searchQuery = '';
+                } finally {
+                    this.isDownloading = false;
+                }
+            },
+            
+            // Delete model handler
+            async deleteModel(modelName) {
+                await appState.deleteModel(modelName);
+                this.selectedModel = null;
+            },
+            
+            // Get model details URL
+            modelDetailsUrl(modelName) {
+                return `/models/${encodeURIComponent(modelName)}`;
+            },
+            
+            // Check if model is downloading
+            isModelDownloading(modelName) {
+                // Implement download tracking logic if needed
+                return false;
+            }
+        }));
+    });
+});
+
 // Main JavaScript for Ollama Model Fine-Tuner
 
 document.addEventListener('DOMContentLoaded', function() {
