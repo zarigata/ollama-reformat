@@ -7,6 +7,7 @@ Improved with better model discovery, enhanced unlock tools, and VENV support
 import gradio as gr
 import sys
 import os
+import platform
 from pathlib import Path
 
 # Add src to path
@@ -32,7 +33,15 @@ def create_enhanced_interface():
     processor = DataProcessor()
     
     # Get system info
-    system_info = hardware.get_system_info()
+    system_info = {
+        'cpu_name': f"{platform.system()} {platform.release()}",
+        'total_ram_gb': hardware.memory['total_gb'],
+        'gpu_info': hardware.gpu_info['name'] if hardware.gpu_info['available'] else 'CPU Only',
+        'platform': platform.system(),
+        'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        'training_mode': hardware.device.upper(),
+        'max_memory_gb': hardware.memory['available_gb']
+    }
     
     # Create interface tabs
     dashboard = EnhancedDashboardTab(hardware, scraper)

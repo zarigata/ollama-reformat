@@ -170,9 +170,13 @@ class EnhancedPromptTab:
         )
         
         # Load initial technique info
-        gr.on(
-            triggers=[gr.on.PageLoad],
+        app.load(
             fn=show_technique_info,
             inputs=[technique_selector],
             outputs=[technique_info]
+        )
+        
+        app.load(
+            fn=load_analytics,
+            outputs=[comparison_table, history_table, usage_stats]
         )

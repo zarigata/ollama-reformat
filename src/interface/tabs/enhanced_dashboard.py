@@ -99,8 +99,7 @@ class EnhancedDashboardTab:
             return get_system_info(), get_download_status()
         
         # Load initial data
-        gr.on(
-            triggers=[gr.on.PageLoad],
+        app.load(
             fn=lambda: [refresh_models(), get_system_info(), get_download_status()],
             outputs=[model_list, system_info, download_status]
         )

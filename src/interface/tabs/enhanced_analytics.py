@@ -92,8 +92,7 @@ class EnhancedAnalyticsTab:
             return f"Report exported to {filename}"
         
         # Bind events
-        gr.on(
-            triggers=[gr.on.PageLoad],
+        app.load(
             fn=load_analytics,
             outputs=[comparison_table, history_table, usage_stats]
         )

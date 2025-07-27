@@ -135,8 +135,7 @@ class EnhancedTrainingTab:
         )
         
         # Load initial models
-        gr.on(
-            triggers=[gr.on.PageLoad],
+        app.load(
             fn=refresh_models,
             outputs=[model_dropdown]
         )
