@@ -1,4 +1,9 @@
-/* Custom styles for One Ring AI Platform */
+/* Main styles for Ollama Model Fine-Tuner */
+
+/* Base styles */
+body {
+    @apply min-h-screen flex flex-col;
+}
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
@@ -7,329 +12,149 @@
 }
 
 ::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-
-.dark ::-webkit-scrollbar-track {
-    background: #2d3748;
+    @apply bg-gray-100;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #cbd5e0;
-    border-radius: 4px;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-    background: #4a5568;
+    @apply bg-gray-400 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #a0aec0;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-    background: #718096;
+    @apply bg-gray-500;
 }
 
 /* Animations */
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-.fade-in {
-    animation: fadeIn 0.3s ease-in;
-}
-
-@keyframes slideInUp {
-    from {
-        transform: translateY(20px);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
-.slide-in-up {
-    animation: slideInUp 0.4s ease-out;
-}
-
-/* Progress bar */
-.progress-bar {
-    height: 6px;
-    background: linear-gradient(90deg, #6366f1, #8b5cf6);
-    border-radius: 3px;
-    transition: width 0.3s ease;
-}
-
-/* Card transitions */
-.card-hover {
-    transition: all 0.3s ease;
-}
-
-.card-hover:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-/* Custom toggle switch */
-.toggle-switch {
-    position: relative;
-    display: inline-block;
-    width: 48px;
-    height: 24px;
-}
-
-.toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.toggle-slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #ccc;
-    transition: .4s;
-    border-radius: 24px;
-}
-
-.toggle-slider:before {
-    position: absolute;
-    content: "";
-    height: 18px;
-    width: 18px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: .4s;
-    border-radius: 50%;
-}
-
-input:checked + .toggle-slider {
-    background-color: #6366f1;
-}
-
-input:focus + .toggle-slider {
-    box-shadow: 0 0 1px #6366f1;
-}
-
-input:checked + .toggle-slider:before {
-    transform: translateX(24px);
-}
-
-/* Loading spinner */
-.spinner {
-    width: 24px;
-    height: 24px;
-    border: 3px solid rgba(99, 102, 241, 0.3);
-    border-radius: 50%;
-    border-top-color: #6366f1;
-    animation: spin 1s linear infinite;
-}
-
-.dark .spinner {
-    border: 3px solid rgba(139, 92, 246, 0.3);
-    border-top-color: #8b5cf6;
-}
-
 @keyframes spin {
     to {
         transform: rotate(360deg);
     }
 }
 
-/* File upload area */
-.file-upload-area {
-    border: 2px dashed #cbd5e0;
-    border-radius: 8px;
-    padding: 2rem;
-    text-align: center;
-    transition: all 0.3s ease;
+.animate-spin {
+    animation: spin 1s linear infinite;
 }
 
-.dark .file-upload-area {
-    border-color: #4a5568;
+/* Model card hover effect */
+.model-card {
+    transition: all 0.2s ease-in-out;
 }
 
-.file-upload-area:hover,
-.file-upload-area.dragging {
-    border-color: #6366f1;
-    background-color: rgba(99, 102, 241, 0.05);
+.model-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
-.dark .file-upload-area:hover,
-.dark .file-upload-area.dragging {
-    border-color: #8b5cf6;
-    background-color: rgba(139, 92, 246, 0.1);
+/* Form elements */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="url"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"],
+input[type="time"],
+input[type="search"],
+input[type="tel"],
+select,
+select[multiple],
+textarea {
+    @apply mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm;
 }
 
-/* Tooltip */
-.tooltip {
-    position: relative;
-    display: inline-block;
+/* Buttons */
+.btn {
+    @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
 }
 
-.tooltip .tooltip-text {
-    visibility: hidden;
-    width: 120px;
-    background-color: #1a202c;
-    color: #fff;
-    text-align: center;
-    border-radius: 6px;
-    padding: 5px;
-    position: absolute;
-    z-index: 1;
-    bottom: 125%;
-    left: 50%;
-    margin-left: -60px;
+.btn-secondary {
+    @apply bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-indigo-500;
+}
+
+.btn-danger {
+    @apply bg-red-600 hover:bg-red-700 focus:ring-red-500;
+}
+
+/* Badges */
+.badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-primary {
+    @apply bg-indigo-100 text-indigo-800;
+}
+
+.badge-success {
+    @apply bg-green-100 text-green-800;
+}
+
+.badge-warning {
+    @apply bg-yellow-100 text-yellow-800;
+}
+
+.badge-danger {
+    @apply bg-red-100 text-red-800;
+}
+
+/* Alert */
+.alert {
+    @apply p-4 rounded-md;
+}
+
+.alert-success {
+    @apply bg-green-50 text-green-800;
+}
+
+.alert-error {
+    @apply bg-red-50 text-red-800;
+}
+
+.alert-warning {
+    @apply bg-yellow-50 text-yellow-800;
+}
+
+.alert-info {
+    @apply bg-blue-50 text-blue-800;
+}
+
+/* Loading spinner */
+.loading-spinner {
+    @apply animate-spin rounded-full border-4 border-gray-300 border-t-indigo-600;
+}
+
+/* Custom transitions */
+.fade-enter-active, .fade-leave-active {
+    transition: opacity 0.2s;
+}
+.fade-enter-from, .fade-leave-to {
     opacity: 0;
-    transition: opacity 0.3s;
 }
 
-.dark .tooltip .tooltip-text {
-    background-color: #e2e8f0;
-    color: #1a202c;
+/* Custom scrollable container */
+.scrollable-container {
+    @apply overflow-y-auto;
+    max-height: calc(100vh - 200px);
 }
 
-.tooltip:hover .tooltip-text {
-    visibility: visible;
-    opacity: 1;
+/* Model card specific */
+.model-card .progress {
+    @apply h-1 bg-gray-200 rounded-full overflow-hidden;
 }
 
-/* Terminal-like output */
-.terminal {
-    background-color: #1a202c;
-    color: #e2e8f0;
-    font-family: monospace;
-    padding: 1rem;
-    border-radius: 6px;
-    overflow-x: auto;
-    white-space: pre-wrap;
-}
-
-.dark .terminal {
-    background-color: #000;
-    color: #f7fafc;
-}
-
-/* Model card badges */
-.model-badge {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 500;
-    line-height: 1;
-}
-
-.badge-size {
-    background-color: #e0f2fe;
-    color: #0369a1;
-}
-
-.dark .badge-size {
-    background-color: #0c4a6e;
-    color: #7dd3fc;
-}
-
-.badge-type {
-    background-color: #fef3c7;
-    color: #92400e;
-}
-
-.dark .badge-type {
-    background-color: #78350f;
-    color: #fcd34d;
-}
-
-.badge-status {
-    background-color: #dcfce7;
-    color: #166534;
-}
-
-.dark .badge-status {
-    background-color: #14532d;
-    color: #86efac;
-}
-
-/* Fine-tuning progress steps */
-.step-container {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 2rem;
-}
-
-.step {
-    flex: 1;
-    text-align: center;
-    position: relative;
-}
-
-.step:not(:last-child):after {
-    content: '';
-    position: absolute;
-    top: 15px;
-    left: 50%;
-    width: 100%;
-    height: 2px;
-    background-color: #e2e8f0;
-    z-index: 1;
-}
-
-.dark .step:not(:last-child):after {
-    background-color: #4a5568;
-}
-
-.step-circle {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background-color: #e2e8f0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 0.5rem;
-    position: relative;
-    z-index: 2;
-}
-
-.dark .step-circle {
-    background-color: #4a5568;
-}
-
-.step.active .step-circle {
-    background-color: #6366f1;
-    color: white;
-}
-
-.dark .step.active .step-circle {
-    background-color: #8b5cf6;
-}
-
-.step.completed .step-circle {
-    background-color: #10b981;
-    color: white;
-}
-
-.dark .step.completed .step-circle {
-    background-color: #059669;
+.model-card .progress-bar {
+    @apply h-full bg-indigo-600;
+    width: 0%;
+    transition: width 0.3s ease;
 }
 
 /* Responsive adjustments */
 @media (max-width: 640px) {
-    .step-text {
-        font-size: 0.75rem;
+    .container {
+        @apply px-4;
     }
     
-    .step-circle {
-        width: 24px;
-        height: 24px;
+    .model-card {
+        @apply w-full;
     }
 }
