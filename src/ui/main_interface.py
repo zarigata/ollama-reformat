@@ -10,7 +10,7 @@ from pathlib import Path
 from .search_interface import SearchInterface
 from .model_playground import ModelPlayground
 from ..enhanced_model_manager import EnhancedModelManager
-from ..hardware_detector import HardwareInfoDetector
+from ..hardware_detector import HardwareDetector
 from ..jailbreak_finder import JailbreakPromptFinder
 from ..data_processor import DataProcessor
 from ..simple_trainer import SimpleTrainer
