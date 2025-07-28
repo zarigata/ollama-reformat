@@ -1,0 +1,186 @@
+"""
+Main Gradio interface - designed for non-technical users
+Simple, clean, dark mode interface
+"""
+
+import gradio as gr
+import logging
+from typing import Dict, Any, List
+from pathlib import Path
+
+from ..enhanced_model_manager import EnhancedModelManager
+from ..hardware_detector import HardwareDetector
+from ..jailbreak_finder import JailbreakPromptFinder
+from ..data_processor import DataProcessor
+from ..simple_trainer import SimpleTrainer
+from .search_interface import SearchInterface
+
+def create_gradio_interface(model_manager: EnhancedModelManager, hardware_info: Dict[str, Any]) -> gr.Blocks:
+    """Create the main Gradio interface"""
+    
+    # Initialize components
+    jailbreak_finder = JailbreakPromptFinder()
+    data_processor = DataProcessor()
+    trainer = SimpleTrainer(model_manager, hardware_info)
+    
+    # Custom CSS for dark theme
+    css = """
+    .dark {
+        background-color: #0f0f0f;
+        color: #ffffff;
+    }
+    .gradio-container {
+        background-color: #0f0f0f;
+    }
+    .gr-button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        border-radius: 8px;
+        color: white;
+        font-weight: bold;
+    }
+    .gr-button:hover {
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    }
+    .info-box {
+        background-color: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 10px 0;
+    }
+    """
+    
+    with gr.Blocks(theme=gr.themes.Soft(), css=css, title="AI Model Fine-Tuning Studio") as app:
+        gr.Markdown("# 🤖 AI Model Fine-Tuning Studio")
+        gr.Markdown("### Simple, powerful fine-tuning for everyone")
+        
+        with gr.Tab("🏠 Home"):
+            # Hardware info
+            hardware_box = gr.HTML(
+                value=f"""
+                <div class="info-box">
+                    <h3>💻 Your System</h3>
+                    <p><strong>Device:</strong> {hardware_info['device_name']}</p>
+                    <p><strong>Memory:</strong> {hardware_info['memory_gb']:.1f}GB</p>
+                    <p><strong>Status:</strong> {hardware_info['recommendation']}</p>
+                </div>
+                """
+            )
+        
+        with gr.Tab("🔍 Search & Download"):
+            search_interface = SearchInterface(model_manager)
+            search_ui = search_interface.create_search_interface()
+            search_ui.render()
+        
+        with gr.Tab("📋 My Models"):
+            gr.Markdown("## Your Installed Models")
+            
+            refresh_btn = gr.Button("🔄 Refresh List")
+            models_table = gr.Dataframe(
+                headers=["Model Name", "Type", "Size", "Location"],
+                interactive=False,
+                label="Installed Models"
+            )
+        
+        with gr.Tab("🔓 Jailbreak Prompts"):
+            gr.Markdown("## Automatic Jailbreak Prompts")
+            gr.Markdown("These prompts help create less restricted models for research purposes")
+            
+            jailbreaks = jailbreak_finder.get_available_jailbreaks()
+            
+            with gr.Row():
+                with gr.Column():
+                    jailbreak_dropdown = gr.Dropdown(
+                        choices=[j["name"] for j in jailbreaks],
+                        value=jailbreak_finder.get_recommended_jailbreak()["name"],
+                        label="Select Jailbreak Type"
+                    )
+                    
+                    jailbreak_preview = gr.Textbox(
+                        label="Jailbreak Prompt Preview",
+                        lines=5,
+                        interactive=False
+                    )
+                    
+                    auto_jailbreak = gr.Checkbox(
+                        label="Auto-select best jailbreak",
+                        value=True
+                    )
+        
+        with gr.Tab("📊 Data Import"):
+            gr.Markdown("## Upload Your Training Data")
+            gr.Markdown("Supported: PDF, TXT, DOCX, CSV, JSON, MD")
+            
+            with gr.Row():
+                with gr.Column():
+                    file_upload = gr.File(
+                        label="Upload Files",
+                        file_count="multiple",
+                        file_types=[".pdf", ".txt", ".docx", ".csv", ".json", ".md"]
+                    )
+                    
+                    upload_btn = gr.Button("📤 Process Files", variant="primary")
+                    upload_status = gr.Textbox(label="Processing Status", interactive=False)
+                
+                with gr.Column():
+                    processed_data = gr.Textbox(
+                        label="Processed Data Preview",
+                        lines=10,
+                        interactive=False
+                    )
+        
+        with gr.Tab("🎯 Fine-Tune"):
+            gr.Markdown("## Start Fine-Tuning")
+            
+            with gr.Row():
+                with gr.Column():
+                    model_select = gr.Dropdown(
+                        label="Select Model to Fine-Tune",
+                        choices=["Select a model first..."]
+                    )
+                    
+                    training_method = gr.Radio(
+                        choices=["Quick Fine-tune", "Advanced Fine-tune"],
+                        value="Quick Fine-tune",
+                        label="Training Method"
+                    )
+                    
+                    start_training = gr.Button("🚀 Start Training", variant="primary")
+                    training_status = gr.Textbox(label="Training Status", interactive=False)
+                
+                with gr.Column():
+                    training_progress = gr.Progress()
+                    training_logs = gr.Textbox(
+                        label="Training Logs",
+                        lines=15,
+                        interactive=False
+                    )
+        
+        # Event handlers
+        def update_models_list():
+            models = model_manager.get_installed_models()
+            return [[m["name"], m["type"], m["size"], m.get("path", "")] for m in models]
+        
+        def update_jailbreak_preview(jailbreak_name):
+            prompt = jailbreak_finder.get_jailbreak_prompt(jailbreak_name)
+            return prompt
+        
+        def process_uploaded_files(files):
+            if not files:
+                return "No files uploaded"
+            
+            processed = data_processor.process_files(files)
+            return f"Processed {len(processed)} files successfully!"
+        
+        # Connect events
+        refresh_btn.click(update_models_list, outputs=models_table)
+        jailbreak_dropdown.change(update_jailbreak_preview, inputs=jailbreak_dropdown, outputs=jailbreak_preview)
+        upload_btn.click(process_uploaded_files, inputs=file_upload, outputs=upload_status)
+        
+        # Initial loads
+        app.load(update_models_list, outputs=models_table)
+        app.load(lambda: jailbreak_finder.get_recommended_jailbreak()["name"], outputs=jailbreak_dropdown)
+        app.load(lambda: jailbreak_finder.get_recommended_jailbreak()["prompt"], outputs=jailbreak_preview)
+    
+    return app

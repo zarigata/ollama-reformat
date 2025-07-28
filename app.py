@@ -14,9 +14,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from src.hardware_detector import HardwareDetector
-from src.model_manager import ModelManager
+from src.enhanced_model_manager import EnhancedModelManager
 from src.ui.main_interface import create_gradio_interface
-from src.config import Config
+from src.config import SimpleConfig as Config
 
 def setup_logging():
     """Setup logging configuration"""
@@ -40,13 +40,14 @@ def main():
         # Initialize configuration
         config = Config()
         
-        # Detect hardware capabilities
-        hardware = HardwareDetector()
-        hardware_info = hardware.detect_hardware()
+        # Initialize components
+        hardware_detector = HardwareDetector()
+        hardware_info = hardware_detector.detect_hardware()
+        
         logger.info(f"Hardware detected: {hardware_info}")
         
-        # Initialize model manager
-        model_manager = ModelManager(config, hardware_info)
+        # Initialize enhanced model manager
+        model_manager = EnhancedModelManager(config, hardware_info)
         
         # Create and launch Gradio interface
         interface = create_gradio_interface(model_manager, hardware_info)
