@@ -18,6 +18,8 @@ from .search_interface import SearchInterface
 
 def create_gradio_interface(model_manager: EnhancedModelManager, hardware_info: Dict[str, Any]) -> gr.Blocks:
     """Create the main Gradio interface"""
+    # Initialize the jailbreak finder
+    jailbreak_finder = JailbreakPromptFinder()
     
     # Initialize interfaces
     search_interface = SearchInterface(model_manager)
