@@ -7,10 +7,10 @@ import gradio as gr
 import logging
 from typing import Dict, Any, List
 from pathlib import Path
-from ..utils.env_utils import env_config
-
+from .search_interface import SearchInterface
+from .model_playground import ModelPlayground
 from ..enhanced_model_manager import EnhancedModelManager
-from ..hardware_detector import HardwareDetector
+from ..hardware_detector import HardwareInfoDetector
 from ..jailbreak_finder import JailbreakPromptFinder
 from ..data_processor import DataProcessor
 from ..simple_trainer import SimpleTrainer
@@ -19,8 +19,9 @@ from .search_interface import SearchInterface
 def create_gradio_interface(model_manager: EnhancedModelManager, hardware_info: Dict[str, Any]) -> gr.Blocks:
     """Create the main Gradio interface"""
     
-    # Initialize components
-    jailbreak_finder = JailbreakPromptFinder()
+    # Initialize interfaces
+    search_interface = SearchInterface(model_manager)
+    model_playground = ModelPlayground(model_manager.config)
     data_processor = DataProcessor()
     trainer = SimpleTrainer(model_manager, hardware_info)
     
@@ -157,6 +158,11 @@ def create_gradio_interface(model_manager: EnhancedModelManager, hardware_info: 
                         lines=15,
                         interactive=False
                     )
+        
+        # Settings Tab
+        # Model Playground Tab
+        with gr.Tab("🤖 Playground"):
+            model_playground.create_playground_interface()
         
         # Settings Tab
         with gr.Tab("⚙️ Settings"):
