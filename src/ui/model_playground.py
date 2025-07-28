@@ -339,36 +339,41 @@ class ModelPlayground:
                 if not message.strip():
                     return "", history
                 
-                # Add user message to history
-                history = history + [{"role": "user", "content": message}]
-                
                 try:
-                    # Generate response (streaming would be better here)
+                    # Convert history to the format expected by generate_response
+                    chat_history = []
+                    for msg in history:
+                        if msg["role"] == "user":
+                            chat_history.append((msg["content"], ""))
+                        elif msg["role"] == "assistant" and chat_history:
+                            chat_history[-1] = (chat_history[-1][0], msg["content"])
+                    
+                    # Add current message
+                    chat_history.append((message, ""))
+                    
+                    # Generate response
                     _, updated_history = self.generate_response(
                         user_input=message,
                         model_name=model,
                         temperature=temp,
                         max_tokens=tokens,
                         template=template,
-                        chat_history=history
+                        chat_history=chat_history
                     )
                     
-                    # Get the last message pair
-                    if updated_history and len(updated_history) >= 2:
-                        last_user_msg, last_bot_msg = updated_history[-2:]
-                        history = history[:-1]  # Remove the placeholder
-                        history.extend([
-                            {"role": "user", "content": last_user_msg[0]},
-                            {"role": "assistant", "content": last_bot_msg[1]}
-                        ])
+                    # Convert back to the format expected by the Chat component
+                    new_history = []
+                    for user_msg, bot_msg in updated_history:
+                        if user_msg:
+                            new_history.append({"role": "user", "content": user_msg})
+                        if bot_msg:
+                            new_history.append({"role": "assistant", "content": bot_msg})
                     
-                    return "", history
+                    return "", new_history
                     
                 except Exception as e:
                     error_msg = f"Error: {str(e)}"
                     logger.error(f"Error in process_message: {error_msg}", exc_info=True)
-                    if history and history[-1]["role"] == "user":
-                        history[-1] = {"role": "user", "content": message}
                     history.append({"role": "assistant", "content": error_msg})
                     return "", history
             
