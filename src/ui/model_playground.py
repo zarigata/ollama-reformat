@@ -182,143 +182,226 @@ class ModelPlayground:
             return error_msg, chat_history
     
     def create_playground_interface(self):
-        """Create the Gradio interface for the model playground"""
+        """Create a ChatGPT-like interface for the model playground"""
+        
+        # Custom CSS for ChatGPT-like styling
+        css = """
+        .chat-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+        }
+        .header-bar {
+            background: #f7f7f8;
+            border-bottom: 1px solid #e5e5e5;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .model-selector {
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 14px;
+        }
+        .chat-messages {
+            height: calc(100vh - 200px);
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .input-container {
+            border-top: 1px solid #e5e5e5;
+            padding: 20px;
+            background: #ffffff;
+        }
+        .input-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .message-input {
+            flex: 1;
+            min-height: 44px;
+            max-height: 200px;
+            border: 1px solid #d1d5db;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 16px;
+            resize: none;
+            outline: none;
+        }
+        .send-button {
+            background: #10a37f;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            min-width: 60px;
+        }
+        .send-button:hover {
+            background: #0d8f6f;
+        }
+        .send-button:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+        }
+        .settings-panel {
+            position: fixed;
+            right: 20px;
+            top: 20px;
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            width: 280px;
+        }
+        .new-chat-btn {
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .new-chat-btn:hover {
+            background: #f9fafb;
+        }
+        """
+        
         with gr.Blocks(
-            title="AI Chat Playground",
-            theme=gr.themes.Soft(
-                primary_hue="blue",
-                secondary_hue="indigo",
-                neutral_hue="slate",
-                spacing_size="sm",
-                radius_size="md"
+            title="ChatGPT Clone - Ollama",
+            css=css,
+            theme=gr.themes.Default(
+                primary_hue="emerald",
+                secondary_hue="gray",
+                neutral_hue="gray",
+                font=["system-ui", "sans-serif"]
             )
         ) as interface:
-            gr.Markdown("""
-            # 💬 AI Chat Playground
-            Chat with any Ollama model in a clean, responsive interface.
-            """)
             
             # Store chat history in the session state
             chat_history = gr.State([])
             
-            with gr.Row(equal_height=True):
-                # Left sidebar for settings
-                with gr.Column(scale=1, min_width=300):
-                    gr.Markdown("### ⚙️ Settings")
-                    
-                    with gr.Group():
+            # Header with model selection
+            with gr.Row(elem_classes="header-bar"):
+                with gr.Column(scale=1):
+                    gr.HTML("<h2 style='margin: 0; font-size: 18px; font-weight: 600;'>ChatGPT Clone</h2>")
+                
+                with gr.Column(scale=1):
+                    with gr.Row():
                         model_dropdown = gr.Dropdown(
-                            label="Model",
                             choices=self.list_ollama_models(),
                             value=self.list_ollama_models()[0] if self.list_ollama_models() else None,
-                            interactive=True,
-                            scale=2
-                        )
-                        
-                        with gr.Row():
-                            refresh_btn = gr.Button("🔄 Refresh Models", variant="secondary")
-                            clear_btn = gr.Button("🧹 New Chat", variant="secondary")
-                    
-                    with gr.Accordion("Advanced Settings", open=False):
-                        template_dropdown = gr.Dropdown(
-                            label="Prompt Style",
-                            choices=list(self.prompt_templates.keys()),
-                            value="Chat",
-                            interactive=True
-                        )
-                        
-                        temperature = gr.Slider(
-                            minimum=0.1,
-                            maximum=1.5,
-                            value=0.7,
-                            step=0.1,
-                            label="Creativity (Temperature)",
-                            info="Higher values make output more random"
-                        )
-                        
-                        max_tokens = gr.Slider(
-                            minimum=128,
-                            maximum=4096,
-                            value=2048,
-                            step=128,
-                            label="Max Response Length",
-                            info="Maximum number of tokens to generate"
-                        )
-                    
-                    gr.Markdown("### System Status")
-                    system_info = gr.JSON(
-                        value={
-                            "Status": "🟢 Connected" if self.list_ollama_models() else "🔴 Disconnected",
-                            "Available Models": len(self.list_ollama_models()),
-                            "Memory Usage": f"{psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB"
-                        },
-                        label="System Status"
-                    )
-                
-                # Main chat area
-                with gr.Column(scale=3):
-                    # Chat interface
-                    chatbot = gr.Chatbot(
-                        value=[],
-                        height=600,
-                        show_label=False,
-                        show_copy_button=True,
-                        avatar_images=(
-                            "https://i.imgur.com/8BQzOGW.png",  # User avatar
-                            "https://i.imgur.com/7L4sINW.png"   # Bot avatar
-                        ),
-                        bubble_full_width=False,
-                        placeholder="Start chatting with the AI...",
-                        container=True,
-                        show_share_button=True,
-                        type="messages"
-                    )
-                    
-                    # User input area
-                    with gr.Row():
-                        user_input = gr.Textbox(
                             label="",
-                            placeholder="Type your message here...",
                             show_label=False,
                             container=False,
-                            scale=5,
-                            min_width=0,
-                            max_lines=5,
-                            autofocus=True
+                            elem_classes="model-selector",
+                            scale=3
                         )
                         
-                        with gr.Column(scale=1, min_width=100):
-                            send_btn = gr.Button("Send", variant="primary", size="lg")
-                            stop_btn = gr.Button("⏹️", variant="stop", size="sm")
-                    
-                    # Quick action buttons
-                    with gr.Row():
-                        gr.Examples(
-                            examples=[
-                                "Explain quantum computing in simple terms",
-                                "Write a Python function to sort a list",
-                                "What are the latest AI trends?"
-                            ],
-                            inputs=user_input,
-                            label="Try these examples:",
-                            examples_per_page=3
+                        clear_btn = gr.Button(
+                            "+ New chat",
+                            variant="secondary",
+                            elem_classes="new-chat-btn",
+                            scale=1
                         )
+            
+            # Main chat area
+            with gr.Column(elem_classes="chat-container"):
+                # Chat messages
+                chatbot = gr.Chatbot(
+                    value=[],
+                    height=650,
+                    show_label=False,
+                    show_copy_button=True,
+                    bubble_full_width=False,
+                    placeholder="How can I help you today?",
+                    container=False,
+                    type="messages",
+                    elem_classes="chat-messages",
+                    avatar_images=(
+                        None,  # User avatar (will use default)
+                        "🤖"   # Bot avatar
+                    )
+                )
+            
+            # Input area
+            with gr.Column(elem_classes="input-container"):
+                with gr.Row(elem_classes="input-row"):
+                    user_input = gr.Textbox(
+                        placeholder="Message ChatGPT Clone...",
+                        show_label=False,
+                        container=False,
+                        scale=6,
+                        max_lines=6,
+                        elem_classes="message-input",
+                        autofocus=True
+                    )
                     
-                    # Footer with model info
-                    gr.Markdown("""
-                    ---
-                    <div style="text-align: center; color: #666; font-size: 0.9em;">
-                        <p>Powered by Ollama • All processing happens locally on your machine</p>
-                    </div>
-                    """)
+                    send_btn = gr.Button(
+                        "Send",
+                        variant="primary",
+                        elem_classes="send-button",
+                        scale=1
+                    )
+            
+            # Settings panel (collapsible)
+            with gr.Accordion("⚙️ Settings", open=False, elem_classes="settings-panel"):
+                template_dropdown = gr.Dropdown(
+                    label="Prompt Style",
+                    choices=list(self.prompt_templates.keys()),
+                    value="Chat",
+                    interactive=True
+                )
+                
+                temperature = gr.Slider(
+                    minimum=0.1,
+                    maximum=1.5,
+                    value=0.7,
+                    step=0.1,
+                    label="Temperature",
+                    info="Controls randomness"
+                )
+                
+                max_tokens = gr.Slider(
+                    minimum=128,
+                    maximum=4096,
+                    value=2048,
+                    step=128,
+                    label="Max tokens",
+                    info="Maximum response length"
+                )
+                
+                with gr.Row():
+                    refresh_btn = gr.Button("🔄 Refresh Models", size="sm")
+                
+                # System status
+                system_info = gr.JSON(
+                    value={
+                        "Status": "🟢 Connected" if self.list_ollama_models() else "🔴 Disconnected",
+                        "Models": len(self.list_ollama_models()),
+                        "Memory": f"{psutil.Process().memory_info().rss / 1024 / 1024:.0f}MB"
+                    },
+                    label="System Status",
+                    show_label=True
+                )
             
             # Event handlers
             def refresh_models():
                 models = self.list_ollama_models()
                 status = {
                     "Status": "🟢 Connected" if models else "🔴 Disconnected",
-                    "Available Models": len(models),
-                    "Memory Usage": f"{psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB"
+                    "Models": len(models),
+                    "Memory": f"{psutil.Process().memory_info().rss / 1024 / 1024:.0f}MB"
                 }
                 return [
                     gr.update(choices=models, value=models[0] if models else None),
@@ -380,15 +463,12 @@ class ModelPlayground:
             # Connect components
             refresh_btn.click(
                 fn=refresh_models,
-                outputs=[model_dropdown, system_info],
-                show_progress="minimal"
+                outputs=[model_dropdown, system_info]
             )
             
             clear_btn.click(
                 fn=clear_chat,
-                inputs=[],
-                outputs=[chatbot, chat_history],
-                show_progress="minimal"
+                outputs=[chatbot, chat_history]
             )
             
             # Handle send button click
@@ -402,8 +482,7 @@ class ModelPlayground:
                     max_tokens,
                     template_dropdown
                 ],
-                outputs=[user_input, chatbot],
-                show_progress="minimal"
+                outputs=[user_input, chatbot]
             )
             
             # Handle enter key in textbox
@@ -417,16 +496,7 @@ class ModelPlayground:
                     max_tokens,
                     template_dropdown
                 ],
-                outputs=[user_input, chatbot],
-                show_progress="minimal"
-            )
-            
-            # Stop generation button
-            stop_btn.click(
-                fn=None,
-                inputs=None,
-                outputs=None,
-                cancels=[msg, msg_event]
+                outputs=[user_input, chatbot]
             )
             
             # Update chat history state
@@ -442,8 +512,7 @@ class ModelPlayground:
             # Auto-refresh models on load
             interface.load(
                 fn=refresh_models,
-                outputs=[model_dropdown, system_info],
-                show_progress="hidden"
+                outputs=[model_dropdown, system_info]
             )
             
             return interface
