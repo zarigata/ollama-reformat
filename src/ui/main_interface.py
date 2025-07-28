@@ -7,6 +7,7 @@ import gradio as gr
 import logging
 from typing import Dict, Any, List
 from pathlib import Path
+from ..utils.env_utils import env_config
 
 from ..enhanced_model_manager import EnhancedModelManager
 from ..hardware_detector import HardwareDetector
@@ -156,6 +157,62 @@ def create_gradio_interface(model_manager: EnhancedModelManager, hardware_info: 
                         lines=15,
                         interactive=False
                     )
+        
+        # Settings Tab
+        with gr.Tab("⚙️ Settings"):
+            gr.Markdown("## Application Settings")
+            
+            with gr.Row():
+                with gr.Column(scale=2):
+                    gr.Markdown("### Hugging Face Token")
+                    gr.Markdown("Enter your Hugging Face token to access private models and increase API limits.")
+                    gr.Markdown("Get your token from [Hugging Face Account Settings](https://huggingface.co/settings/tokens)")
+                    
+                    with gr.Row():
+                        hf_token = gr.Textbox(
+                            label="HF Token",
+                            value=model_manager.hf_token or "",
+                            type="password",
+                            placeholder="hf_...",
+                            show_label=False,
+                            container=False,
+                            scale=5
+                        )
+                        save_btn = gr.Button("💾 Save", variant="primary", scale=1)
+                    
+                    token_status = gr.Textbox(
+                        label="Status",
+                        value="✅ Token saved" if model_manager.hf_token else "⚠️ No token set. Some features may be limited.",
+                        interactive=False
+                    )
+                    
+                    def save_hf_token(token: str):
+                        """Save HF token and update model manager"""
+                        model_manager.hf_token = token.strip()
+                        env_config.save_hf_token(token)
+                        return {
+                            token_status: gr.Textbox.update(
+                                value="✅ Token saved successfully!",
+                                visible=True
+                            ),
+                            hf_token: gr.Textbox.update(value="")
+                        }
+                    
+                    save_btn.click(
+                        fn=save_hf_token,
+                        inputs=[hf_token],
+                        outputs=[token_status, hf_token]
+                    )
+                
+                with gr.Column(scale=1):
+                    gr.Markdown("### About")
+                    gr.Markdown("""
+                    **Hugging Face Fine-Tuning UI**  
+                    Version 1.0.0  
+                    
+                    [View on GitHub](https://github.com/yourusername/hf-finetune-ui)  
+                    [Report an Issue](https://github.com/yourusername/hf-finetune-ui/issues)
+                    """)
         
         # Event handlers
         def update_models_list():

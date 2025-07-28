@@ -26,12 +26,23 @@ class EnhancedModelManager:
         self.hardware_info = hardware_info
         self.logger = logging.getLogger(__name__)
         
-        # Try to get HF token from environment or config
-        self.hf_token = os.environ.get('HF_TOKEN')
-        if not self.hf_token and hasattr(config, 'hf_token'):
-            self.hf_token = config.hf_token
-            
-        self.hf_api = HfApi(token=self.hf_token)
+        # Initialize HF token from config
+        self._hf_token = getattr(config, 'hf_token', '')
+        self.hf_api = HfApi(token=self._hf_token or None)
+    
+    @property
+    def hf_token(self):
+        """Get the current HF token"""
+        return self._hf_token
+        
+    @hf_token.setter
+    def hf_token(self, token: str):
+        """Update the HF token and refresh the API client"""
+        self._hf_token = token.strip() if token else ''
+        self.hf_api = HfApi(token=self._hf_token or None)
+        # Update config if it has the attribute
+        if hasattr(self.config, 'hf_token'):
+            self.config.hf_token = self._hf_token
         
     def search_models_real(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Search Hugging Face models with fallback to popular models on error"""
