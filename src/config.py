@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from .utils.env_utils import EnvConfig
+from .utils.env_utils import EnvConfig, env_config
 
 class SimpleConfig:
     """Ultra-simple configuration - works automatically"""
@@ -22,8 +22,10 @@ class SimpleConfig:
         self.models_dir = self.config_dir / "models"
         self.processed_dir = self.config_dir / "processed"
         
+        # Initialize environment config
+        self.env_config = EnvConfig()
         # Load environment settings
-        self.hf_token = env_config.get_hf_token() or ''
+        self.hf_token = self.env_config.get_hf_token() or ''
         
         # Create directories
         for dir_path in [self.upload_dir, self.models_dir, self.processed_dir]:

@@ -189,7 +189,9 @@ def create_gradio_interface(model_manager: EnhancedModelManager, hardware_info: 
                     def save_hf_token(token: str):
                         """Save HF token and update model manager"""
                         model_manager.hf_token = token.strip()
-                        env_config.save_hf_token(token)
+                        # Save to config's env_config
+                        if hasattr(model_manager.config, 'env_config'):
+                            model_manager.config.env_config.save_hf_token(token)
                         return {
                             token_status: gr.Textbox.update(
                                 value="✅ Token saved successfully!",
