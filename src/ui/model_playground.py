@@ -3,11 +3,12 @@ Model Playground - Interactive chat interface for testing Ollama models
 """
 import gradio as gr
 import json
+import logging
 import os
+import psutil
 import requests
 from typing import Dict, List, Tuple, Any, Optional
 from pathlib import Path
-import logging
 
 from ..utils.ollama_service import ollama_service, ensure_ollama_running, check_ollama_installed
 
@@ -27,6 +28,16 @@ class ModelPlayground:
             "QA": "Question: {user_input}\nAnswer:"
         }
     
+    def check_ollama_health(self) -> Tuple[bool, str]:
+        """Check if Ollama API is healthy and responding"""
+        try:
+            response = requests.get(f"{self.ollama_base_url}/api/tags", timeout=10)
+            if response.status_code == 200:
+                return True, "Ollama is running and responding"
+            return False, f"Ollama API returned status code {response.status_code}"
+        except requests.exceptions.RequestException as e:
+            return False, f"Failed to connect to Ollama: {str(e)}"
+    
     def list_ollama_models(self) -> List[str]:
         """List all available Ollama models"""
         try:
@@ -35,10 +46,10 @@ class ModelPlayground:
                 logger.warning("Ollama is not installed")
                 return []
                 
-            # Ensure Ollama is running
-            success, message = ensure_ollama_running()
-            if not success:
-                logger.warning(f"Failed to start Ollama: {message}")
+            # Check Ollama health
+            is_healthy, health_msg = self.check_ollama_health()
+            if not is_healthy:
+                logger.warning(f"Ollama health check failed: {health_msg}")
                 return []
                 
             response = requests.get(f"{self.ollama_base_url}/api/tags", timeout=10)
@@ -59,198 +70,375 @@ class ModelPlayground:
         model_name: str, 
         temperature: float = 0.7,
         max_tokens: int = 1024,
-        template: str = "Chat"
+        template: str = "Chat",
+        chat_history: List[Tuple[str, str]] = None
     ) -> Tuple[str, List[Tuple[str, str]]]:
         """Generate response using Ollama API"""
         if not user_input.strip():
-            return "Please enter a message.", self.chat_history
+            return "Please enter a message.", chat_history or []
             
         try:
+            # Use provided chat history or fallback to instance history
+            if chat_history is None:
+                chat_history = self.chat_history
+            
             # Format the prompt using the selected template
             prompt_template = self.prompt_templates.get(template, "{user_input}")
             formatted_input = prompt_template.format(user_input=user_input)
             
-            # Prepare the chat history for context
-            messages = [
-                {"role": "user" if i % 2 == 0 else "assistant", "content": msg}
-                for i, msg in enumerate([user_input])  # Start with current input
-            ]
+            # Add user message to chat history
+            chat_history.append((user_input, ""))
             
-            # Call Ollama API
-            response = requests.post(
-                f"{self.ollama_base_url}/api/chat",
-                json={
-                    "model": model_name,
-                    "messages": messages,
-                    "options": {
-                        "temperature": temperature,
-                        "num_predict": max_tokens
-                    }
+            # Prepare the chat history for context in the format Ollama expects
+            messages = []
+            for i, (user_msg, bot_msg) in enumerate(chat_history):
+                if user_msg:
+                    messages.append({"role": "user", "content": user_msg})
+                if bot_msg and i < len(chat_history) - 1:  # Don't include the empty bot message we just added
+                    messages.append({"role": "assistant", "content": bot_msg})
+            
+            # Log the request being sent to Ollama
+            logger.debug(f"Sending request to Ollama API: {json.dumps({
+                'model': model_name,
+                'messages': [{'role': m['role'], 'content': f"{m['content'][:50]}..." if len(m['content']) > 50 else m['content']} for m in messages],
+                'options': {
+                    'temperature': temperature,
+                    'num_predict': max_tokens
                 },
-                stream=False
-            )
+                'stream': False
+            }, indent=2)}")
             
-            if response.status_code == 200:
-                response_text = response.json()['message']['content']
-                self.chat_history.append((user_input, response_text))
-                return "", self.chat_history
-            else:
-                error_msg = f"Error: {response.status_code} - {response.text}"
-                logger.error(error_msg)
-                return error_msg, self.chat_history
+            # Call Ollama API with streaming disabled first
+            try:
+                response = requests.post(
+                    f"{self.ollama_base_url}/api/chat",
+                    json={
+                        "model": model_name,
+                        "messages": messages,
+                        "options": {
+                            "temperature": temperature,
+                            "num_predict": max_tokens
+                        },
+                        "stream": False
+                    },
+                    timeout=120  # Increased timeout to 120 seconds
+                )
                 
+                # Log raw response for debugging
+                logger.debug(f"Ollama API response: {response.status_code} - {response.text[:500]}")
+                
+                if response.status_code == 200:
+                    try:
+                        response_data = response.json()
+                        if 'message' in response_data and 'content' in response_data['message']:
+                            response_text = response_data['message']['content']
+                            # Update the last message in chat history with the response
+                            if chat_history:
+                                chat_history[-1] = (user_input, response_text)
+                                self.chat_history = chat_history  # Update instance history
+                            return "", chat_history
+                        else:
+                            error_msg = "Unexpected response format from Ollama API"
+                            logger.error(f"{error_msg}: {response_data}")
+                            # Try to extract any error message from the response
+                            if 'error' in response_data:
+                                error_msg = f"Ollama API error: {response_data['error']}"
+                            return error_msg, chat_history
+                    except json.JSONDecodeError as je:
+                        logger.error(f"JSON decode error. Raw response: {response.text}")
+                        # Try to extract error message if response is not valid JSON
+                        if 'error' in response.text:
+                            error_msg = f"Ollama error: {response.text}"
+                        else:
+                            error_msg = f"Invalid response from Ollama (non-JSON): {response.text[:200]}"
+                        return error_msg, chat_history
+                else:
+                    error_msg = f"Error {response.status_code} from Ollama API"
+                    try:
+                        error_data = response.json()
+                        if 'error' in error_data:
+                            error_msg += f": {error_data['error']}"
+                    except:
+                        error_msg += f": {response.text}"
+                    logger.error(error_msg)
+                    return error_msg, chat_history
+                    
+            except requests.exceptions.RequestException as re:
+                error_msg = f"Request error: {str(re)}"
+                logger.error(f"{error_msg}", exc_info=True)
+                return error_msg, chat_history
+                
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Network error: {str(e)}"
+            logger.error(f"{error_msg}", exc_info=True)
+            return error_msg, chat_history
+        except json.JSONDecodeError as e:
+            error_msg = f"Error decoding Ollama API response: {str(e)}"
+            logger.error(f"{error_msg}", exc_info=True)
+            return error_msg, chat_history
         except Exception as e:
-            error_msg = f"Error generating response: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            return error_msg, self.chat_history
+            error_msg = f"Unexpected error: {str(e)}"
+            logger.error(f"{error_msg}", exc_info=True)
+            return error_msg, chat_history
     
     def create_playground_interface(self):
         """Create the Gradio interface for the model playground"""
-        with gr.Blocks(title="Model Playground") as interface:
-            gr.Markdown("# 🎮 Model Playground")
-            gr.Markdown("Test your fine-tuned Ollama models in an interactive chat interface.")
+        with gr.Blocks(
+            title="AI Chat Playground",
+            theme=gr.themes.Soft(
+                primary_hue="blue",
+                secondary_hue="indigo",
+                neutral_hue="slate",
+                spacing_size="sm",
+                radius_size="md"
+            )
+        ) as interface:
+            gr.Markdown("""
+            # 💬 AI Chat Playground
+            Chat with any Ollama model in a clean, responsive interface.
+            """)
             
-            with gr.Row():
-                with gr.Column(scale=3):
-                    # Model selection and settings
-                    with gr.Row():
+            # Store chat history in the session state
+            chat_history = gr.State([])
+            
+            with gr.Row(equal_height=True):
+                # Left sidebar for settings
+                with gr.Column(scale=1, min_width=300):
+                    gr.Markdown("### ⚙️ Settings")
+                    
+                    with gr.Group():
                         model_dropdown = gr.Dropdown(
-                            label="Select Model",
+                            label="Model",
                             choices=self.list_ollama_models(),
+                            value=self.list_ollama_models()[0] if self.list_ollama_models() else None,
+                            interactive=True,
+                            scale=2
+                        )
+                        
+                        with gr.Row():
+                            refresh_btn = gr.Button("🔄 Refresh Models", variant="secondary")
+                            clear_btn = gr.Button("🧹 New Chat", variant="secondary")
+                    
+                    with gr.Accordion("Advanced Settings", open=False):
+                        template_dropdown = gr.Dropdown(
+                            label="Prompt Style",
+                            choices=list(self.prompt_templates.keys()),
+                            value="Chat",
                             interactive=True
                         )
-                        refresh_btn = gr.Button("🔄", variant="secondary")
-                    
-                    # Chat interface
-                    chatbot = gr.Chatbot(
-                        label="Chat with Model",
-                        height=500,
-                        show_copy_button=True
-                    )
-                    
-                    # User input
-                    with gr.Row():
-                        user_input = gr.Textbox(
-                            label="Your Message",
-                            placeholder="Type your message here...",
-                            show_label=False,
-                            container=False,
-                            scale=5
+                        
+                        temperature = gr.Slider(
+                            minimum=0.1,
+                            maximum=1.5,
+                            value=0.7,
+                            step=0.1,
+                            label="Creativity (Temperature)",
+                            info="Higher values make output more random"
                         )
-                        send_btn = gr.Button("Send", variant="primary", scale=1)
+                        
+                        max_tokens = gr.Slider(
+                            minimum=128,
+                            maximum=4096,
+                            value=2048,
+                            step=128,
+                            label="Max Response Length",
+                            info="Maximum number of tokens to generate"
+                        )
                     
-                    # Settings
-                    with gr.Accordion("⚙️ Settings", open=False):
-                        with gr.Row():
-                            template_dropdown = gr.Dropdown(
-                                label="Prompt Template",
-                                choices=list(self.prompt_templates.keys()),
-                                value="Chat"
-                            )
-                            temperature = gr.Slider(
-                                minimum=0.1,
-                                maximum=2.0,
-                                value=0.7,
-                                step=0.1,
-                                label="Temperature"
-                            )
-                            max_tokens = gr.Slider(
-                                minimum=64,
-                                maximum=4096,
-                                value=1024,
-                                step=64,
-                                label="Max Tokens"
-                            )
-                    
-                    # Clear button
-                    clear_btn = gr.Button("🧹 Clear Chat")
-                
-                # System info panel
-                with gr.Column(scale=1):
-                    gr.Markdown("### System Information")
+                    gr.Markdown("### System Status")
                     system_info = gr.JSON(
                         value={
-                            "Ollama Status": "Connected" if self.list_ollama_models() else "Not Connected",
-                            "Available Models": len(self.list_ollama_models())
+                            "Status": "🟢 Connected" if self.list_ollama_models() else "🔴 Disconnected",
+                            "Available Models": len(self.list_ollama_models()),
+                            "Memory Usage": f"{psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB"
                         },
                         label="System Status"
                     )
+                
+                # Main chat area
+                with gr.Column(scale=3):
+                    # Chat interface
+                    chatbot = gr.Chatbot(
+                        value=[],
+                        height=600,
+                        show_label=False,
+                        show_copy_button=True,
+                        avatar_images=(
+                            "https://i.imgur.com/8BQzOGW.png",  # User avatar
+                            "https://i.imgur.com/7L4sINW.png"   # Bot avatar
+                        ),
+                        bubble_full_width=False,
+                        placeholder="Start chatting with the AI...",
+                        container=True,
+                        show_share_button=True,
+                        type="messages"
+                    )
                     
-                    gr.Markdown("### Quick Tips\n"
-                               "- Select your fine-tuned model from the dropdown\n"
-                               "- Try different prompt templates for better results\n"
-                               "- Adjust temperature for more creative (higher) or focused (lower) responses\n"
-                               "- Clear the chat to start a new conversation")
+                    # User input area
+                    with gr.Row():
+                        user_input = gr.Textbox(
+                            label="",
+                            placeholder="Type your message here...",
+                            show_label=False,
+                            container=False,
+                            scale=5,
+                            min_width=0,
+                            max_lines=5,
+                            autofocus=True
+                        )
+                        
+                        with gr.Column(scale=1, min_width=100):
+                            send_btn = gr.Button("Send", variant="primary", size="lg")
+                            stop_btn = gr.Button("⏹️", variant="stop", size="sm")
+                    
+                    # Quick action buttons
+                    with gr.Row():
+                        gr.Examples(
+                            examples=[
+                                "Explain quantum computing in simple terms",
+                                "Write a Python function to sort a list",
+                                "What are the latest AI trends?"
+                            ],
+                            inputs=user_input,
+                            label="Try these examples:",
+                            examples_per_page=3
+                        )
+                    
+                    # Footer with model info
+                    gr.Markdown("""
+                    ---
+                    <div style="text-align: center; color: #666; font-size: 0.9em;">
+                        <p>Powered by Ollama • All processing happens locally on your machine</p>
+                    </div>
+                    """)
             
             # Event handlers
             def refresh_models():
                 models = self.list_ollama_models()
-                return gr.Dropdown.update(choices=models, value=models[0] if models else None)
+                status = {
+                    "Status": "🟢 Connected" if models else "🔴 Disconnected",
+                    "Available Models": len(models),
+                    "Memory Usage": f"{psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB"
+                }
+                return [
+                    gr.update(choices=models, value=models[0] if models else None),
+                    status
+                ]
             
             def clear_chat():
-                self.chat_history = []
-                return []
+                return [], []
             
-            def send_message(
+            def process_message(
                 message: str, 
-                history: List[Tuple[str, str]], 
+                history: List[Dict[str, str]], 
                 model: str, 
                 temp: float, 
                 tokens: int,
                 template: str
-            ) -> Tuple[str, List[Tuple[str, str]]]:
+            ) -> Tuple[str, List[Dict[str, str]]]:
                 if not message.strip():
                     return "", history
                 
                 # Add user message to history
-                history.append((message, ""))
+                history = history + [{"role": "user", "content": message}]
                 
-                # Generate response
-                _, updated_history = self.generate_response(
-                    user_input=message,
-                    model_name=model,
-                    temperature=temp,
-                    max_tokens=tokens,
-                    template=template
-                )
-                
-                return "", updated_history
+                try:
+                    # Generate response (streaming would be better here)
+                    _, updated_history = self.generate_response(
+                        user_input=message,
+                        model_name=model,
+                        temperature=temp,
+                        max_tokens=tokens,
+                        template=template,
+                        chat_history=history
+                    )
+                    
+                    # Get the last message pair
+                    if updated_history and len(updated_history) >= 2:
+                        last_user_msg, last_bot_msg = updated_history[-2:]
+                        history = history[:-1]  # Remove the placeholder
+                        history.extend([
+                            {"role": "user", "content": last_user_msg[0]},
+                            {"role": "assistant", "content": last_bot_msg[1]}
+                        ])
+                    
+                    return "", history
+                    
+                except Exception as e:
+                    error_msg = f"Error: {str(e)}"
+                    logger.error(f"Error in process_message: {error_msg}", exc_info=True)
+                    if history and history[-1]["role"] == "user":
+                        history[-1] = {"role": "user", "content": message}
+                    history.append({"role": "assistant", "content": error_msg})
+                    return "", history
             
             # Connect components
             refresh_btn.click(
                 fn=refresh_models,
-                outputs=[model_dropdown]
+                outputs=[model_dropdown, system_info],
+                show_progress="minimal"
             )
             
             clear_btn.click(
                 fn=clear_chat,
-                outputs=[chatbot]
+                inputs=[],
+                outputs=[chatbot, chat_history],
+                show_progress="minimal"
             )
             
-            send_btn.click(
-                fn=send_message,
+            # Handle send button click
+            msg = send_btn.click(
+                fn=process_message,
                 inputs=[
                     user_input,
-                    gr.State(self.chat_history),
+                    chat_history,
                     model_dropdown,
                     temperature,
                     max_tokens,
                     template_dropdown
                 ],
-                outputs=[user_input, chatbot]
+                outputs=[user_input, chatbot],
+                show_progress="minimal"
             )
             
-            user_input.submit(
-                fn=send_message,
+            # Handle enter key in textbox
+            msg_event = user_input.submit(
+                fn=process_message,
                 inputs=[
                     user_input,
-                    gr.State(self.chat_history),
+                    chat_history,
                     model_dropdown,
                     temperature,
                     max_tokens,
                     template_dropdown
                 ],
-                outputs=[user_input, chatbot]
+                outputs=[user_input, chatbot],
+                show_progress="minimal"
+            )
+            
+            # Stop generation button
+            stop_btn.click(
+                fn=None,
+                inputs=None,
+                outputs=None,
+                cancels=[msg, msg_event]
+            )
+            
+            # Update chat history state
+            def update_chat_history(history):
+                return history
+            
+            chatbot.change(
+                fn=update_chat_history,
+                inputs=chatbot,
+                outputs=chat_history
+            )
+            
+            # Auto-refresh models on load
+            interface.load(
+                fn=refresh_models,
+                outputs=[model_dropdown, system_info],
+                show_progress="hidden"
             )
             
             return interface
