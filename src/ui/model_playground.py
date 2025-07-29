@@ -164,25 +164,22 @@ class ModelPlayground:
         # Custom CSS for ChatGPT-like styling with colored avatars
         css = """
         /* Avatar styles */
-        .user-avatar {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: #10a37f;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 12px;
-            margin-right: 12px;
+        .message.user {
+            --avatar-bg: #10a37f;
+            --avatar-text: 'U';
         }
         
-        .bot-avatar {
+        .message.assistant {
+            --avatar-bg: #6e6e80;
+            --avatar-text: 'AI';
+        }
+        
+        .message::before {
+            content: var(--avatar-text);
             width: 24px;
             height: 24px;
             border-radius: 50%;
-            background: #6e6e80;
+            background: var(--avatar-bg);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -190,6 +187,7 @@ class ModelPlayground:
             font-weight: bold;
             font-size: 12px;
             margin-right: 12px;
+            flex-shrink: 0;
         }
         
         /* Message styles */
@@ -364,7 +362,7 @@ class ModelPlayground:
             
             # Main chat area
             with gr.Column(elem_classes="chat-container"):
-                # Chat messages with custom avatars
+                # Chat messages with CSS-styled avatars
                 chatbot = gr.Chatbot(
                     value=[],
                     height=650,
@@ -374,11 +372,7 @@ class ModelPlayground:
                     placeholder="How can I help you today?",
                     container=False,
                     type="messages",
-                    elem_classes="chat-messages",
-                    avatar_images=(
-                        "<div class='user-avatar'>U</div>",  # User avatar
-                        "<div class='bot-avatar'>AI</div>"   # Bot avatar
-                    )
+                    elem_classes="chat-messages"
                 )
                 
                 # Add typing indicator to the chat
@@ -388,6 +382,65 @@ class ModelPlayground:
                     "<div class='typing-dot'></div>"
                     "<div class='typing-dot'></div>"
                     "</div>"
+                )
+                
+                # Add JavaScript to handle the typing indicator and message streaming
+                js = """
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Function to show typing indicator
+                    function showTypingIndicator() {
+                        const indicator = document.querySelector('.typing-indicator');
+                        if (indicator) {
+                            indicator.style.display = 'flex';
+                            // Scroll to bottom when showing typing indicator
+                            const chatContainer = document.querySelector('.chat-messages');
+                            if (chatContainer) {
+                                chatContainer.scrollTop = chatContainer.scrollHeight;
+                            }
+                        }
+                    }
+                    
+                    // Function to hide typing indicator
+                    function hideTypingIndicator() {
+                        const indicator = document.querySelector('.typing-indicator');
+                        if (indicator) indicator.style.display = 'none';
+                    }
+                    
+                    // Function to scroll to bottom of chat
+                    function scrollToBottom() {
+                        const chatContainer = document.querySelector('.chat-messages');
+                        if (chatContainer) {
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                        }
+                    }
+                    
+                    // Expose functions to window
+                    window.showTypingIndicator = showTypingIndicator;
+                    window.hideTypingIndicator = hideTypingIndicator;
+                    window.scrollToBottom = scrollToBottom;
+                    
+                    // Auto-scroll when new messages are added
+                    const observer = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(mutation) {
+                            if (mutation.addedNodes.length) {
+                                scrollToBottom();
+                            }
+                        });
+                    });
+                    
+                    const chatContainer = document.querySelector('.chat-messages');
+                    if (chatContainer) {
+                        observer.observe(chatContainer, { childList: true, subtree: true });
+                    }
+                });
+                """
+                
+                # Add the JavaScript to the interface
+                interface.load(
+                    None,
+                    None,
+                    None,
+                    js=js
                 )
             
             # Input area
@@ -491,7 +544,20 @@ class ModelPlayground:
                     # Add current message
                     chat_history.append((message, ""))
                     
-                    # Stream the response
+                    # Show typing indicator
+                    js = """
+                    <script>
+                        if (window.showTypingIndicator) {
+                            showTypingIndicator();
+                        }
+                    </script>
+                    """
+                    
+                    # Initial yield to show typing indicator
+                    yield "", history + [{"role": "assistant", "content": ""}]
+                    
+                    # Process the streaming response
+                    full_response = ""
                     for _, updated_history in self.stream_response(
                         user_input=message,
                         model_name=model,
@@ -500,15 +566,39 @@ class ModelPlayground:
                         template=template,
                         chat_history=chat_history
                     ):
-                        # Convert to the format expected by the Chat component
-                        new_history = []
-                        for user_msg, bot_msg in updated_history:
-                            if user_msg:
-                                new_history.append({"role": "user", "content": user_msg})
-                            if bot_msg:
-                                new_history.append({"role": "assistant", "content": bot_msg})
-                        
-                        yield "", new_history
+                        if updated_history and len(updated_history) > 0:
+                            # Get the latest bot response
+                            latest_bot_response = updated_history[-1][1]
+                            if latest_bot_response != full_response:
+                                full_response = latest_bot_response
+                                
+                                # Convert to the format expected by the Chat component
+                                new_history = []
+                                for user_msg, bot_msg in updated_history[:-1]:  # All but the last message
+                                    if user_msg:
+                                        new_history.append({"role": "user", "content": user_msg})
+                                    if bot_msg:
+                                        new_history.append({"role": "assistant", "content": bot_msg})
+                                
+                                # Add the current message and the streaming response
+                                if updated_history[-1][0]:  # User message
+                                    new_history.append({"role": "user", "content": updated_history[-1][0]})
+                                if full_response:  # Streaming bot response
+                                    new_history.append({"role": "assistant", "content": full_response})
+                                
+                                yield "", new_history
+                    
+                    # Hide typing indicator after completion
+                    js = """
+                    <script>
+                        if (window.hideTypingIndicator) {
+                            hideTypingIndicator();
+                        }
+                        if (window.scrollToBottom) {
+                            scrollToBottom();
+                        }
+                    </script>
+                    """
                     
                 except Exception as e:
                     error_msg = f"Error: {str(e)}"
