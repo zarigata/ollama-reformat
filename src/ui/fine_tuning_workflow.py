@@ -356,7 +356,7 @@ class FineTuningWorkflow:
                 except Exception as e:
                     return [], f"<div class='warning-box'>Error processing files: {str(e)}</div>"
             
-            def update_training_summary(model, data, config):
+            def update_training_summary(model, data, lr, epochs, max_len, batch_size):
                 if not model or not data:
                     return "<div class='warning-box'>Please complete steps 1-3 first</div>"
                 
@@ -432,12 +432,12 @@ Time: {result['estimated_time']}
                 outputs=[processed_data_state, data_preview]
             )
             
-            # Update training summary when any config changes
-            config_inputs = [base_model, processed_data_state, learning_rate, num_epochs, max_length, batch_size]
-            for input_comp in config_inputs:
+            # Update training summary when model or data changes
+            summary_inputs = [base_model, processed_data_state]
+            for input_comp in summary_inputs:
                 input_comp.change(
                     update_training_summary,
-                    inputs=config_inputs,
+                    inputs=summary_inputs,
                     outputs=[training_summary]
                 )
             
