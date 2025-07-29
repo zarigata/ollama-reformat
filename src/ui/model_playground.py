@@ -64,18 +64,19 @@ class ModelPlayground:
             logger.error(f"Error listing Ollama models: {e}", exc_info=True)
             return []
     
-    def generate_response(
-        self, 
-        user_input: str, 
-        model_name: str, 
+    def stream_response(
+        self,
+        user_input: str,
+        model_name: str,
         temperature: float = 0.7,
         max_tokens: int = 1024,
         template: str = "Chat",
         chat_history: List[Tuple[str, str]] = None
-    ) -> Tuple[str, List[Tuple[str, str]]]:
-        """Generate response using Ollama API"""
+    ) -> Generator[Tuple[str, List[Tuple[str, str]]], None, None]:
+        """Stream response from Ollama API"""
         if not user_input.strip():
-            return "Please enter a message.", chat_history or []
+            yield "Please enter a message.", chat_history or []
+            return
             
         try:
             # Use provided chat history or fallback to instance history
@@ -87,7 +88,7 @@ class ModelPlayground:
             formatted_input = prompt_template.format(user_input=user_input)
             
             # Add user message to chat history
-            chat_history.append((user_input, ""))
+            chat_history = chat_history + [(user_input, "")]
             
             # Prepare the chat history for context in the format Ollama expects
             messages = []
@@ -105,10 +106,10 @@ class ModelPlayground:
                     'temperature': temperature,
                     'num_predict': max_tokens
                 },
-                'stream': False
+                'stream': True
             }, indent=2)}")
             
-            # Call Ollama API with streaming disabled first
+            # Call Ollama API with streaming enabled
             try:
                 response = requests.post(
                     f"{self.ollama_base_url}/api/chat",
@@ -119,73 +120,119 @@ class ModelPlayground:
                             "temperature": temperature,
                             "num_predict": max_tokens
                         },
-                        "stream": False
+                        "stream": True
                     },
+                    stream=True,
                     timeout=120  # Increased timeout to 120 seconds
                 )
                 
-                # Log raw response for debugging
-                logger.debug(f"Ollama API response: {response.status_code} - {response.text[:500]}")
+                full_response = ""
+                for line in response.iter_lines():
+                    if line:
+                        try:
+                            chunk = json.loads(line.decode('utf-8'))
+                            if 'message' in chunk and 'content' in chunk['message']:
+                                content = chunk['message']['content']
+                                if content:
+                                    full_response += content
+                                    # Update the last message in chat history with the current response
+                                    updated_history = chat_history[:-1] + [(chat_history[-1][0], full_response)]
+                                    yield "", updated_history
+                        except json.JSONDecodeError:
+                            continue
                 
-                if response.status_code == 200:
-                    try:
-                        response_data = response.json()
-                        if 'message' in response_data and 'content' in response_data['message']:
-                            response_text = response_data['message']['content']
-                            # Update the last message in chat history with the response
-                            if chat_history:
-                                chat_history[-1] = (user_input, response_text)
-                                self.chat_history = chat_history  # Update instance history
-                            return "", chat_history
-                        else:
-                            error_msg = "Unexpected response format from Ollama API"
-                            logger.error(f"{error_msg}: {response_data}")
-                            # Try to extract any error message from the response
-                            if 'error' in response_data:
-                                error_msg = f"Ollama API error: {response_data['error']}"
-                            return error_msg, chat_history
-                    except json.JSONDecodeError as je:
-                        logger.error(f"JSON decode error. Raw response: {response.text}")
-                        # Try to extract error message if response is not valid JSON
-                        if 'error' in response.text:
-                            error_msg = f"Ollama error: {response.text}"
-                        else:
-                            error_msg = f"Invalid response from Ollama (non-JSON): {response.text[:200]}"
-                        return error_msg, chat_history
-                else:
-                    error_msg = f"Error {response.status_code} from Ollama API"
-                    try:
-                        error_data = response.json()
-                        if 'error' in error_data:
-                            error_msg += f": {error_data['error']}"
-                    except:
-                        error_msg += f": {response.text}"
-                    logger.error(error_msg)
-                    return error_msg, chat_history
-                    
+                # Final update with the complete response
+                chat_history[-1] = (chat_history[-1][0], full_response)
+                self.chat_history = chat_history  # Update instance history
+                return
+                
             except requests.exceptions.RequestException as re:
                 error_msg = f"Request error: {str(re)}"
                 logger.error(f"{error_msg}", exc_info=True)
-                return error_msg, chat_history
+                yield error_msg, chat_history
+                return
                 
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Network error: {str(e)}"
-            logger.error(f"{error_msg}", exc_info=True)
-            return error_msg, chat_history
-        except json.JSONDecodeError as e:
-            error_msg = f"Error decoding Ollama API response: {str(e)}"
-            logger.error(f"{error_msg}", exc_info=True)
-            return error_msg, chat_history
         except Exception as e:
-            error_msg = f"Unexpected error: {str(e)}"
+            error_msg = f"Error: {str(e)}"
             logger.error(f"{error_msg}", exc_info=True)
-            return error_msg, chat_history
+            yield error_msg, chat_history
+            return
     
     def create_playground_interface(self):
         """Create a ChatGPT-like interface for the model playground"""
         
-        # Custom CSS for ChatGPT-like styling
+        # Custom CSS for ChatGPT-like styling with colored avatars
         css = """
+        /* Avatar styles */
+        .user-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #10a37f;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            margin-right: 12px;
+        }
+        
+        .bot-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #6e6e80;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            margin-right: 12px;
+        }
+        
+        /* Message styles */
+        .message {
+            display: flex;
+            padding: 16px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+        
+        .message:last-child {
+            border-bottom: none;
+        }
+        
+        .message-content {
+            flex: 1;
+            padding-right: 20px;
+        }
+        
+        /* Typing animation */
+        @keyframes typing {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+        
+        .typing-indicator {
+            display: inline-flex;
+            gap: 4px;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #888;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: 0s; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        /* Main chat styles */
         .chat-container {
             max-width: 800px;
             margin: 0 auto;
@@ -317,7 +364,7 @@ class ModelPlayground:
             
             # Main chat area
             with gr.Column(elem_classes="chat-container"):
-                # Chat messages
+                # Chat messages with custom avatars
                 chatbot = gr.Chatbot(
                     value=[],
                     height=650,
@@ -329,9 +376,18 @@ class ModelPlayground:
                     type="messages",
                     elem_classes="chat-messages",
                     avatar_images=(
-                        None,  # User avatar (will use default)
-                        "🤖"   # Bot avatar
+                        "<div class='user-avatar'>U</div>",  # User avatar
+                        "<div class='bot-avatar'>AI</div>"   # Bot avatar
                     )
+                )
+                
+                # Add typing indicator to the chat
+                typing_indicator = gr.HTML(
+                    "<div class='typing-indicator' style='display: none; padding: 10px 0;'>"
+                    "<div class='typing-dot'></div>"
+                    "<div class='typing-dot'></div>"
+                    "<div class='typing-dot'></div>"
+                    "</div>"
                 )
             
             # Input area
@@ -418,12 +474,13 @@ class ModelPlayground:
                 temp: float, 
                 tokens: int,
                 template: str
-            ) -> Tuple[str, List[Dict[str, str]]]:
+            ) -> Generator[Tuple[str, List[Dict[str, str]]], None, None]:
                 if not message.strip():
-                    return "", history
+                    yield "", history
+                    return
                 
                 try:
-                    # Convert history to the format expected by generate_response
+                    # Convert history to the format expected by stream_response
                     chat_history = []
                     for msg in history:
                         if msg["role"] == "user":
@@ -434,31 +491,30 @@ class ModelPlayground:
                     # Add current message
                     chat_history.append((message, ""))
                     
-                    # Generate response
-                    _, updated_history = self.generate_response(
+                    # Stream the response
+                    for _, updated_history in self.stream_response(
                         user_input=message,
                         model_name=model,
                         temperature=temp,
                         max_tokens=tokens,
                         template=template,
                         chat_history=chat_history
-                    )
-                    
-                    # Convert back to the format expected by the Chat component
-                    new_history = []
-                    for user_msg, bot_msg in updated_history:
-                        if user_msg:
-                            new_history.append({"role": "user", "content": user_msg})
-                        if bot_msg:
-                            new_history.append({"role": "assistant", "content": bot_msg})
-                    
-                    return "", new_history
+                    ):
+                        # Convert to the format expected by the Chat component
+                        new_history = []
+                        for user_msg, bot_msg in updated_history:
+                            if user_msg:
+                                new_history.append({"role": "user", "content": user_msg})
+                            if bot_msg:
+                                new_history.append({"role": "assistant", "content": bot_msg})
+                        
+                        yield "", new_history
                     
                 except Exception as e:
                     error_msg = f"Error: {str(e)}"
                     logger.error(f"Error in process_message: {error_msg}", exc_info=True)
                     history.append({"role": "assistant", "content": error_msg})
-                    return "", history
+                    yield "", history
             
             # Connect components
             refresh_btn.click(
