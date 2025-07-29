@@ -9,6 +9,7 @@ from typing import Dict, Any, List
 from pathlib import Path
 from .search_interface import SearchInterface
 from .model_playground import ModelPlayground
+from .fine_tuning_workflow import FineTuningWorkflow
 from ..enhanced_model_manager import EnhancedModelManager
 from ..hardware_detector import HardwareDetector
 from ..jailbreak_finder import JailbreakPromptFinder
@@ -24,6 +25,7 @@ def create_gradio_interface(model_manager: EnhancedModelManager, hardware_info: 
     # Initialize interfaces
     search_interface = SearchInterface(model_manager)
     model_playground = ModelPlayground(model_manager.config)
+    fine_tuning_workflow = FineTuningWorkflow(model_manager, hardware_info)
     data_processor = DataProcessor()
     trainer = SimpleTrainer(model_manager, hardware_info)
     
@@ -71,6 +73,13 @@ def create_gradio_interface(model_manager: EnhancedModelManager, hardware_info: 
                 </div>
                 """
             )
+        
+        with gr.Tab("🎯 Fine-Tune Models"):
+            gr.Markdown("## 🎯 Complete Fine-Tuning Workflow")
+            gr.Markdown("One unified interface to fine-tune any model with your data")
+            
+            workflow_interface = fine_tuning_workflow.create_workflow_interface()
+            workflow_interface.render()
         
         with gr.Tab("🔍 Search & Download"):
             search_interface = SearchInterface(model_manager)
