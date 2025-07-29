@@ -7,7 +7,7 @@ import logging
 import os
 import psutil
 import requests
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any, Optional, Generator
 from pathlib import Path
 
 from ..utils.ollama_service import ollama_service, ensure_ollama_running, check_ollama_installed
