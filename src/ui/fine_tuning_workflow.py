@@ -142,8 +142,7 @@ class FineTuningWorkflow:
                         
                         base_model = gr.Dropdown(
                             choices=model_choices,
-                            label="📦 Base Model",
-                            info="Choose the model to fine-tune. Larger models need more memory."
+                            label="📦 Base Model"
                         )
                         
                         model_info = gr.HTML()
@@ -176,8 +175,7 @@ class FineTuningWorkflow:
                         data_upload = gr.File(
                             file_count="multiple",
                             file_types=[".txt", ".pdf", ".docx", ".csv", ".json", ".md"],
-                            label="📁 Upload Training Files",
-                            info="Upload any combination of documents. We'll extract the text automatically."
+                            label="📁 Upload Training Files"
                         )
                         
                         data_preview = gr.HTML(label="📊 Data Preview")
@@ -219,8 +217,7 @@ class FineTuningWorkflow:
                                 maximum=1e-2,
                                 value=2e-4,
                                 step=1e-5,
-                                label="Learning Rate",
-                                info="How fast the model learns. Lower = more stable, higher = faster"
+                                label="Learning Rate"
                             )
                             
                             num_epochs = gr.Slider(
@@ -228,8 +225,7 @@ class FineTuningWorkflow:
                                 maximum=10,
                                 value=3,
                                 step=1,
-                                label="Training Epochs",
-                                info="How many times to see all your data"
+                                label="Training Epochs"
                             )
                         
                         max_length = gr.Slider(
@@ -237,8 +233,7 @@ class FineTuningWorkflow:
                             maximum=2048,
                             value=512,
                             step=64,
-                            label="Max Sequence Length",
-                            info="Maximum text length the model will process"
+                            label="Max Sequence Length"
                         )
                         
                         batch_size = gr.Slider(
@@ -246,8 +241,7 @@ class FineTuningWorkflow:
                             maximum=8,
                             value=self.hardware_info.get("optimal_batch_size", 1),
                             step=1,
-                            label="Batch Size",
-                            info=f"Based on your {self.hardware_info['memory_gb']:.1f}GB RAM"
+                            label="Batch Size"
                         )
                         
                     with gr.Column():
@@ -255,15 +249,13 @@ class FineTuningWorkflow:
                         
                         enable_jailbreak = gr.Checkbox(
                             label="Enable Jailbreak Training",
-                            value=False,
-                            info="Create a less restricted model for research purposes"
+                            value=False
                         )
                         
                         jailbreak_type = gr.Dropdown(
                             choices=[j["name"] for j in self.jailbreak_finder.get_available_jailbreaks()],
                             label="Jailbreak Type",
                             value=self.jailbreak_finder.get_recommended_jailbreak()["name"],
-                            info="Choose the level of restriction removal",
                             interactive=False
                         )
                         
@@ -301,8 +293,7 @@ class FineTuningWorkflow:
                     with gr.Column():
                         model_name = gr.Textbox(
                             label="🏷️ Model Name",
-                            placeholder="my-custom-model-v1",
-                            info="Choose a unique name for your fine-tuned model"
+                            placeholder="my-custom-model-v1"
                         )
                         
                         training_summary = gr.HTML()
